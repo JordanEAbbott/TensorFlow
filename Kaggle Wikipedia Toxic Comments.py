@@ -8,15 +8,16 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 vocab_size = 75000
 max_length = 120
-embedding_dim = 16
+embedding_dim = 64
 trunc_type = "post"
 oov_tok = "<OOV>"
 ##num_epochs = 8
 
 def run_all(num_epochs):
     
-    toxicity_vector, comments, padded, word_index = params("train_path")
-    toxicity_vector = to_binary_choice(toxicity_vector)
+    toxicity_vector, comments, padded, word_index, tokenizer = params("train_path", True)
+    
+    return toxicity_vector, comments, padded, word_index, tokenizer
     
     print(toxicity_vector.shape)
     print(comments.shape)
@@ -29,45 +30,21 @@ def run_all(num_epochs):
     export_semantics(model, word_index)
     
     return model, history
-    
-def to_binary_choice(vec):
-    
-    
-    binary_vector = []
-    
-    for vector in vec:
-        good_comment = True
-        for i in vector:
-            if i == 1:
-                good_comment = False
-                
-        if good_comment == True:
-            binary_vector.append(0)
-        if good_comment == False:
-            binary_vector.append(1)
-            
-    return np.asarray(binary_vector)
 
-def params(fp):
+def params(fp, train):
     
     if fp == "train_path":
         file_path = "C:/Users/jorda/Documents/Year 3 Work/Programming/ML/tensorflow/Wikipedia Toxic Comments/train.csv"
     else:
         file_path = fp
     toxicity_vector, comments = read_file(file_path)
-    padded, word_index = process_comments(comments)
     
-    return toxicity_vector, comments, padded, word_index
+    if train:
+        padded, word_index, tokenizer = process_comments(comments)
+        return toxicity_vector, comments, padded, word_index, tokenizer
+    
+    return toxicity_vector, comments
 
-def import_test(fp1, fp2):
-    
-    lines1 = []
-    reader = csv.reader(open(fp1, 'r', encoding='latin-1'))
-    for line in reader:
-        lines1.append(line)     
-    lines1.pop(0)
-    
-    
 def read_file(fp):
     
     lines = []
@@ -85,9 +62,6 @@ def read_file(fp):
         toxicity_vector.append(tmp)
         comments.append(line[1])
     
-    #np.reshape(toxicity_vector, ((6, len(toxicity_vector))))
-    #np.reshape(comments, ((1, len(comments))))
-    
     toxicity_vector, comments = np.asarray(toxicity_vector), np.asarray(comments)
     
     return toxicity_vector, comments
@@ -100,7 +74,7 @@ def process_comments(comments):
     sequences = tokenizer.texts_to_sequences(comments)
     padded = pad_sequences(sequences, maxlen = max_length)
     
-    return padded, word_index
+    return padded, word_index, tokenizer
 
 def compile_model(padded, toxicity_vector, num_epochs):
     
@@ -116,15 +90,13 @@ def compile_model(padded, toxicity_vector, num_epochs):
         
         tf.keras.layers.Embedding(vocab_size, embedding_dim, input_length=max_length),
         tf.keras.layers.GlobalAveragePooling1D(),
-        #tf.keras.layers.Dense(36, activation='relu'),
-        tf.keras.layers.Dense(6, activation='relu'),
-        tf.keras.layers.Dense(1, activation='sigmoid') # FOR BINARY CHOICE
-        #tf.keras.layers.Dense(6, activation='softmax') # FOR NON-BINARY CHOICE
+        tf.keras.layers.Dense(16, activation='relu'),
+        tf.keras.layers.Dense(16, activation='relu'),
+        tf.keras.layers.Dense(6, activation='sigmoid')
         
     ])
     
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy']) # FOR BINARY CHOICE
-    #model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy']) # FOR NON_BINARY CHOICE
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy']) # FOR NON_BINARY CHOICE
     model.summary()
     
     history = model.fit(padded, toxicity_vector, epochs = num_epochs, callbacks=[callbacks])
@@ -165,9 +137,5 @@ def export_semantics(model, word_index):
     out_m.close()
     
     return
-
-"""
-Importing of Test Data
-"""
     
     
