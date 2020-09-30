@@ -5,47 +5,41 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.layers import LSTM
+from tensorflow.keras.layers import Dense
 
 vocab_size = 75000
 max_length = 120
 embedding_dim = 64
 trunc_type = "post"
 oov_tok = "<OOV>"
-##num_epochs = 8
 
-def run_all(num_epochs):
+def run_all(num_lines):
     
-    toxicity_vector, comments, padded, word_index, tokenizer = params("train_path", True)
+    num_epochs = 16
     
-    return toxicity_vector, comments, padded, word_index, tokenizer
-    
-    print(toxicity_vector.shape)
-    print(comments.shape)
-    print(padded.shape)
-    
-    return
-
+    toxicity_vector, comments, padded, word_index, tokenizer = params("train_path", True, num_lines)
 
     model, history = compile_model(padded, toxicity_vector, num_epochs)
     export_semantics(model, word_index)
     
     return model, history
 
-def params(fp, train):
+def params(fp, train, num_lines):
     
     if fp == "train_path":
         file_path = "C:/Users/jorda/Documents/Year 3 Work/Programming/ML/tensorflow/Wikipedia Toxic Comments/train.csv"
     else:
         file_path = fp
-    toxicity_vector, comments = read_file(file_path)
+    toxicity_vector, comments = read_file(file_path, num_lines)
     
     if train:
         padded, word_index, tokenizer = process_comments(comments)
         return toxicity_vector, comments, padded, word_index, tokenizer
     
     return toxicity_vector, comments
-
-def read_file(fp):
+    
+def read_file(fp, n):
     
     lines = []
     reader = csv.reader(open(fp, 'r', encoding='latin-1'))
@@ -64,7 +58,7 @@ def read_file(fp):
     
     toxicity_vector, comments = np.asarray(toxicity_vector), np.asarray(comments)
     
-    return toxicity_vector, comments
+    return toxicity_vector[:n], comments[:n]
 
 def process_comments(comments):
     
@@ -80,8 +74,8 @@ def compile_model(padded, toxicity_vector, num_epochs):
     
     class myCallback(tf.keras.callbacks.Callback):
         def on_epoch_end(self, epoch, logs={}):
-            if(logs.get('accuracy')>0.99):
-                print("\nReached 99% accuracy so stopped training.")
+            if(logs.get('accuracy')>0.95):
+                print("\nReached 95% accuracy so stopped training.")
                 self.model.stop_training = True
                 
     callbacks = myCallback()
@@ -89,9 +83,10 @@ def compile_model(padded, toxicity_vector, num_epochs):
     model = tf.keras.Sequential([
         
         tf.keras.layers.Embedding(vocab_size, embedding_dim, input_length=max_length),
-        tf.keras.layers.GlobalAveragePooling1D(),
-        tf.keras.layers.Dense(16, activation='relu'),
-        tf.keras.layers.Dense(16, activation='relu'),
+        tf.keras.layers.Bidirectional(LSTM(100, return_sequences=True, dropout=0.50), merge_mode='concat'),
+        tf.keras.layers.TimeDistributed(Dense(100,activation='relu')),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(128, activation='relu'),
         tf.keras.layers.Dense(6, activation='sigmoid')
         
     ])
@@ -99,7 +94,7 @@ def compile_model(padded, toxicity_vector, num_epochs):
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy']) # FOR NON_BINARY CHOICE
     model.summary()
     
-    history = model.fit(padded, toxicity_vector, epochs = num_epochs, callbacks=[callbacks])
+    history = model.fit(padded, toxicity_vector, epochs = num_epochs, batch_size = 256, callbacks=[callbacks])
     
     return model, history
 
@@ -137,5 +132,3 @@ def export_semantics(model, word_index):
     out_m.close()
     
     return
-    
-    
